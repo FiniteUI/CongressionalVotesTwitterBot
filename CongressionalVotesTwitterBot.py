@@ -19,19 +19,16 @@ class Endpoints(Enum):
     VOTES = 'votes'
     MEMBERS = 'members'
 
-#load constants
-BASE_PATH = Path(os.path.realpath(__file__)).parent
+#globals
+BASE_PATH = ''
 BOT_SCREEN_NAME = 'congressvotesbt'
 PROPUBLICA_BASE_URL = 'https://api.propublica.org/congress/v1/'
-ENV_PATH = os.path.join(Path(os.path.dirname(os.path.realpath(__file__))).parent, "Keys", "CongressionalVotesTwitterBot.env")
-
-#now load sensitive data, api keys from env file
-dotenv.load_dotenv(ENV_PATH)
-TWITTER_CONSUMER_KEY = os.getenv('TWITTER_CONSUMER_KEY')
-TWITTER_CONSUMER_SECRET = os.getenv('TWITTER_CONSUMER_SECRET')
-TWITTER_TOKEN = os.getenv('TWITTER_TOKEN')
-TWITTER_TOKEN_SECRET = os.getenv('TWITTER_TOKEN_SECRET')
-PROPUBLICA_API_KEY = os.getenv('PROPUBLICA_API_KEY')
+ENV_PATH = ''
+TWITTER_CONSUMER_KEY = ''
+TWITTER_CONSUMER_SECRET = ''
+TWITTER_TOKEN = ''
+TWITTER_TOKEN_SECRET = ''
+PROPUBLICA_API_KEY = ''
 
 def saveLastPostTimestamp(timestamp: datetime):
     #save the last post timestamp so we know which records (should) have already been posted
@@ -274,7 +271,7 @@ def log(message):
     #log a message, add timestamp to it
     print(f"{datetime.now()}: {message}")
 
-def start():
+def startBot():
     #full process, run in a loop. Later will remove the loop and just schedule the program instead
     log(f"Program starting...")
     while 1 != 0:
@@ -295,9 +292,32 @@ def start():
         log(f"Update process complete")
         time.sleep(300)
 
-#run the bot
-start()
+def main():
+    global BASE_PATH 
+    global TWITTER_CONSUMER_KEY 
+    global TWITTER_CONSUMER_SECRET 
+    global TWITTER_TOKEN 
+    global TWITTER_TOKEN_SECRET 
+    global PROPUBLICA_API_KEY 
 
-#run a test post
-#testPost()
+    #load constants
+    BASE_PATH = Path(os.path.realpath(__file__)).parent
+
+    #now load sensitive data, api keys from env file
+    env_path = os.path.join(Path(os.path.dirname(os.path.realpath(__file__))).parent, "Keys", "CongressionalVotesTwitterBot.env")
+    dotenv.load_dotenv(env_path)
+    TWITTER_CONSUMER_KEY = os.getenv('TWITTER_CONSUMER_KEY')
+    TWITTER_CONSUMER_SECRET = os.getenv('TWITTER_CONSUMER_SECRET')
+    TWITTER_TOKEN = os.getenv('TWITTER_TOKEN')
+    TWITTER_TOKEN_SECRET = os.getenv('TWITTER_TOKEN_SECRET')
+    PROPUBLICA_API_KEY = os.getenv('PROPUBLICA_API_KEY')
+
+    #run a test post
+    #testPost()
+
+    #run the bot
+    startBot()
+
+if __name__ == '__main__':
+    main()
 
