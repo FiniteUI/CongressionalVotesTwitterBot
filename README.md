@@ -1,4 +1,4 @@
-# CongressionalVotesTwitterBot
+# Congressional Votes Twitter Bot
 
 This is a small personal project to build a twitter bot to post whenever congress makes a vote. 
 
