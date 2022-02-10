@@ -95,129 +95,130 @@ def getMemberData(memberID):
 
 def postNewVotes(votes):
     #for each new vote, create the tweet and post it
-    with Twitter(auth=OAuth(TWITTER_TOKEN, TWITTER_TOKEN_SECRET, TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET)) as t:
-        for i in votes:
-            congress = i['congress']
-            session = i['session']
-            chamber = i['chamber']
-            roll_call = i['roll_call']
+    t = Twitter(auth=OAuth(TWITTER_TOKEN, TWITTER_TOKEN_SECRET, TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET))
+        
+    for i in votes:
+        congress = i['congress']
+        session = i['session']
+        chamber = i['chamber']
+        roll_call = i['roll_call']
+        
+        if 'bill_id' in i['bill']:
+            bill = i['bill']['number']
+        else:
+            bill = ''
+
+        if 'title' in i['bill']:
+            description = i['bill']['title']
+        else:
+            description = i['description']
+
+        if len(description) > 150:
+            description = description[0:147] + "..."
+
+        question = i['question']
+        result = i['result']
+        yes_votes = i['total']['yes']
+        no_votes = i['total']['no']
+        not_voting = i['total']['not_voting']
+        present = i['total']['present']
+
+        if bill != '':
+            tweet = f'{chamber} Vote {roll_call}\nBill {bill.upper()}: {description}\n\n{question}\n{result}: Y-{yes_votes}, N-{no_votes}, P-{present}, NV-{not_voting}'
+        else:
+            tweet = f'{chamber} Vote {roll_call}\n{description}\n\n{result}: Y-{yes_votes}, N-{no_votes}, P-{present}, NV-{not_voting}'
+        
+        #tweet initial vote tweet, save vote timestamp
+        log(f"Posting tweet [{tweet}]")
+        t.statuses.update(status=tweet)
+        saveLastPostTimestamp(datetime.strptime(i['date'] + " " + i['time'], "%Y-%m-%d %H:%M:%S") + timedelta(seconds=1))
+
+        #now post additional information to a reply of this tweet
+        democratVotes = "Dem: Y-" + str(i['democratic']['yes']) + ", N-" + str(i['democratic']['no']) + ", P-" + str(i['democratic']['present']) + ", NV-" + str(i['democratic']['not_voting'])
+        republicanVotes = "Rep: Y-" + str(i['republican']['yes']) + ", N-" + str(i['republican']['no']) + ", P-" + str(i['republican']['present']) + ", NV-" + str(i['republican']['not_voting'])
+        independentVotes = "Ind: Y-" + str(i['independent']['yes']) + ", N-" + str(i['independent']['no']) + ", P-" + str(i['independent']['present']) + ", NV-" + str(i['independent']['not_voting'])
+        vote_url = i['url']
+        
+        if independentVotes == "Ind: Y-0, N-0, P-0, NV-0":
+            tweet = f'@{BOT_SCREEN_NAME} Vote Breakdown:\n{democratVotes}\n{republicanVotes}\n\nDetails:\n{vote_url}'
+        else:
+            tweet = f'@{BOT_SCREEN_NAME} Vote Breakdown:\n{democratVotes}\n{republicanVotes}\n{independentVotes}\n\nDetails:\n{vote_url}'
+
+        #tweet voting breakdown
+        lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
+        log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
+        t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet)
+
+        #grab propublica vote link:
+        propublicaVoteLink = getPropublicaVoteLink(chamber, congress, roll_call, session)
+
+        #grab c span vote link
+        date = datetime.strptime(i['date'] + " " + i['time'], "%Y-%m-%d %H:%M:%S")
+        cspanLink = getCSpanClipLink(chamber, congress, roll_call, date)
+
+        #grab govtrack vote link
+        govtrackVoteLink = getGovTrackVoteLink(congress, date, chamber, roll_call)
+
+        tweet = f'@{BOT_SCREEN_NAME} Vote Links\n'
+        if (cspanLink != ''):
+            tweet = f'{tweet}C-SPAN Clip: {cspanLink}'
+        tweet = f'{tweet}\nProPublica: {propublicaVoteLink}'
+        tweet = f'{tweet}\nGovTrack: {govtrackVoteLink}'
+        
+        #tweet additional vote information
+        lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
+        log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
+        t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet, card_uri='tombstone://card')
+
+        #now post bill data if any
+        if bill != '':
+            bill_url = i['bill']['api_uri']
+            bill_data = proPublicaAPIGet(bill_url)
+            bill_data = bill_data[0]
+            bill_details_url = bill_data['congressdotgov_url']
+            bill_sponsor = bill_data['sponsor_title'] + " " + bill_data['sponsor']
+            bill_sponsor_id = bill_data['sponsor_id']
+            govtrack_url = bill_data['govtrack_url']
             
-            if 'bill_id' in i['bill']:
-                bill = i['bill']['number']
+            #if sponsored, get sponsor information
+            if(bill_sponsor_id != ''):
+                sponsor_data = getMemberData(bill_sponsor_id)
+
+                if sponsor_data != None:
+                    sponsor_data = sponsor_data[0]
+                    twitterHandle = sponsor_data['twitter_account']
+                else:
+                    log(f"Error - No data returned from member API request...")
+                    twitterHandle = ''
             else:
-                bill = ''
-
-            if 'title' in i['bill']:
-                description = i['bill']['title']
-            else:
-                description = i['description']
-
-            if len(description) > 150:
-                description = description[0:147] + "..."
-
-            question = i['question']
-            result = i['result']
-            yes_votes = i['total']['yes']
-            no_votes = i['total']['no']
-            not_voting = i['total']['not_voting']
-            present = i['total']['present']
-
-            if bill != '':
-                tweet = f'{chamber} Vote {roll_call}\nBill {bill.upper()}: {description}\n\n{question}\n{result}: Y-{yes_votes}, N-{no_votes}, P-{present}, NV-{not_voting}'
-            else:
-                tweet = f'{chamber} Vote {roll_call}\n{description}\n\n{result}: Y-{yes_votes}, N-{no_votes}, P-{present}, NV-{not_voting}'
+                twitterHandle = ''
             
-            #tweet initial vote tweet, save vote timestamp
-            log(f"Posting tweet [{tweet}]")
-            t.statuses.update(status=tweet)
-            saveLastPostTimestamp(datetime.strptime(i['date'] + " " + i['time'], "%Y-%m-%d %H:%M:%S") + timedelta(seconds=1))
-
-            #now post additional information to a reply of this tweet
-            democratVotes = "Dem: Y-" + str(i['democratic']['yes']) + ", N-" + str(i['democratic']['no']) + ", P-" + str(i['democratic']['present']) + ", NV-" + str(i['democratic']['not_voting'])
-            republicanVotes = "Rep: Y-" + str(i['republican']['yes']) + ", N-" + str(i['republican']['no']) + ", P-" + str(i['republican']['present']) + ", NV-" + str(i['republican']['not_voting'])
-            independentVotes = "Ind: Y-" + str(i['independent']['yes']) + ", N-" + str(i['independent']['no']) + ", P-" + str(i['independent']['present']) + ", NV-" + str(i['independent']['not_voting'])
-            vote_url = i['url']
+            #now build the tweet
+            sponsorText = ''
+            if (bill_sponsor_id != ''):
+                if (twitterHandle != ''):
+                    sponsorText = f'Sponsor: .@{twitterHandle}\n'
+                else:
+                    sponsorText = f'Sponsor: {bill_sponsor}\n'
             
-            if independentVotes == "Ind: Y-0, N-0, P-0, NV-0":
-                tweet = f'@{BOT_SCREEN_NAME} Vote Breakdown:\n{democratVotes}\n{republicanVotes}\n\nDetails:\n{vote_url}'
-            else:
-                tweet = f'@{BOT_SCREEN_NAME} Vote Breakdown:\n{democratVotes}\n{republicanVotes}\n{independentVotes}\n\nDetails:\n{vote_url}'
-
-            #tweet voting breakdown
+            #tweet bill information
+            tweet = f'@{BOT_SCREEN_NAME} {sponsorText}\nBill Details: {bill_details_url}'
             lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
             log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
             t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet)
+        
+            #grab c span bill link
+            bill_number = i['bill']['number']
+            cpanBillLink = getCSpanBillLink(congress, bill_number)
 
-            #grab propublica vote link:
-            propublicaVoteLink = getPropublicaVoteLink(chamber, congress, roll_call, session)
+            #grab propublica bill link
+            propublicaBillLink = getPropublicaBillLink(congress, bill_number)
 
-            #grab c span vote link
-            date = datetime.strptime(i['date'] + " " + i['time'], "%Y-%m-%d %H:%M:%S")
-            cspanLink = getCSpanClipLink(chamber, congress, roll_call, date)
-
-            #grab govtrack vote link
-            govtrackVoteLink = getGovTrackVoteLink(congress, date, chamber, roll_call)
-
-            tweet = f'@{BOT_SCREEN_NAME} Vote Links\n'
-            if (cspanLink != ''):
-                tweet = f'{tweet}C-SPAN Clip: {cspanLink}'
-            tweet = f'{tweet}\nProPublica: {propublicaVoteLink}'
-            tweet = f'{tweet}\nGovTrack: {govtrackVoteLink}'
-            
-            #tweet additional vote information
+            #tweet additional bill links
+            tweet = f'@{BOT_SCREEN_NAME} Bill Links\nC-SPAN: {cpanBillLink}\nProPublica: {propublicaBillLink}\nGovTrack: {govtrack_url}'
             lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
             log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
             t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet, card_uri='tombstone://card')
-
-            #now post bill data if any
-            if bill != '':
-                bill_url = i['bill']['api_uri']
-                bill_data = proPublicaAPIGet(bill_url)
-                bill_data = bill_data[0]
-                bill_details_url = bill_data['congressdotgov_url']
-                bill_sponsor = bill_data['sponsor_title'] + " " + bill_data['sponsor']
-                bill_sponsor_id = bill_data['sponsor_id']
-                govtrack_url = bill_data['govtrack_url']
-                
-                #if sponsored, get sponsor information
-                if(bill_sponsor_id != ''):
-                    sponsor_data = getMemberData(bill_sponsor_id)
-
-                    if sponsor_data != None:
-                        sponsor_data = sponsor_data[0]
-                        twitterHandle = sponsor_data['twitter_account']
-                    else:
-                        log(f"Error - No data returned from member API request...")
-                        twitterHandle = ''
-                else:
-                    twitterHandle = ''
-                
-                #now build the tweet
-                sponsorText = ''
-                if (bill_sponsor_id != ''):
-                    if (twitterHandle != ''):
-                        sponsorText = f'Sponsor: .@{twitterHandle}\n'
-                    else:
-                        sponsorText = f'Sponsor: {bill_sponsor}\n'
-                
-                #tweet bill information
-                tweet = f'@{BOT_SCREEN_NAME} {sponsorText}\nBill Details: {bill_details_url}'
-                lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
-                log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
-                t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet)
-            
-                #grab c span bill link
-                bill_number = i['bill']['number']
-                cpanBillLink = getCSpanBillLink(congress, bill_number)
-
-                #grab propublica bill link
-                propublicaBillLink = getPropublicaBillLink(congress, bill_number)
-
-                #tweet additional bill links
-                tweet = f'@{BOT_SCREEN_NAME} Bill Links\nC-SPAN: {cpanBillLink}\nProPublica: {propublicaBillLink}\nGovTrack: {govtrack_url}'
-                lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
-                log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
-                t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet, card_uri='tombstone://card')
 
 def getCSpanClipLink(chamber, congress, voteNumber, date):
     #we build a search link
