@@ -7,6 +7,7 @@ from twitter import *
 import time
 import re
 import dotenv
+import humanize
 
 #enum for chamber
 class Chamber(Enum):
@@ -113,6 +114,11 @@ def postNewVotes(votes):
         else:
             description = i['description']
 
+        if 'number' in i['nomination']:
+            nomination = i['nomination']['number']
+        else:
+            nomination = ''
+
         if len(description) > 150:
             description = description[0:147] + "..."
 
@@ -169,6 +175,15 @@ def postNewVotes(votes):
         lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
         log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
         t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet, card_uri='tombstone://card')
+
+        #now tweet nomination data if any
+        if nomination != '':
+            nominationLink = getCongressNominationLink(congress, nomination)
+            tweet = f'@{BOT_SCREEN_NAME} Nomination {nomination}\nDetails: {nominationLink}'
+
+            lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
+            log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
+            t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet, card_uri='tombstone://card')
 
         #now post bill data if any
         if bill != '':
@@ -257,6 +272,12 @@ def getGovTrackVoteLink(congress, date, chamber, voteNumber):
         chamberCode = 'h'
 
     link = f'https://www.govtrack.us/congress/votes/{congress}-{date.year}/{chamberCode}{voteNumber}'
+    return link
+
+def getCongressNominationLink(congress, nomination):
+    nomination = nomination.replace("PN", "")
+    congress = humanize.ordinal(congress)
+    link = f'https://www.congress.gov/nomination/{congress}-congress/{nomination}'
     return link
 
 def testPost():
