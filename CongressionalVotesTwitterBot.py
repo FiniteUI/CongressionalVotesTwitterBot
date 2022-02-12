@@ -31,6 +31,9 @@ TWITTER_TOKEN = ''
 TWITTER_TOKEN_SECRET = ''
 PROPUBLICA_API_KEY = ''
 
+#for testing
+POST_TWEETS = True
+
 def saveLastPostTimestamp(timestamp: datetime):
     #save the last post timestamp so we know which records (should) have already been posted
     path = os.path.join(BASE_PATH, "Data")
@@ -49,8 +52,8 @@ def getLastPostTimestamp():
         with open(path, 'r') as f:
             date = f.read()
     else:
-        #just returning project start date for now...
-        date = '2022-02-07 20:29:31'
+        #if no saved date, return current timestamp, move on from here
+        date = datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
 
     date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
     return date
@@ -96,7 +99,6 @@ def getMemberData(memberID):
 
 def postNewVotes(votes):
     #for each new vote, create the tweet and post it
-    t = Twitter(auth=OAuth(TWITTER_TOKEN, TWITTER_TOKEN_SECRET, TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET))
         
     for i in votes:
         congress = i['congress']
@@ -104,23 +106,19 @@ def postNewVotes(votes):
         chamber = i['chamber']
         roll_call = i['roll_call']
         
+        #grab bill ID for bill information below
         if 'bill_id' in i['bill']:
             bill = i['bill']['number']
-        else:
-            bill = ''
-
-        if 'title' in i['bill']:
             description = i['bill']['title']
         else:
+            bill = ''
             description = i['description']
 
+        #grab nomination ID for nomination information below
         if 'number' in i['nomination']:
             nomination = i['nomination']['number']
         else:
             nomination = ''
-
-        if len(description) > 150:
-            description = description[0:147] + "..."
 
         question = i['question']
         result = i['result']
@@ -129,15 +127,31 @@ def postNewVotes(votes):
         not_voting = i['total']['not_voting']
         present = i['total']['present']
 
+        #build bill string
         if bill != '':
-            tweet = f'{chamber} Vote {roll_call}\nBill {bill.upper()}: {description}\n\n{question}\n{result}: Y-{yes_votes}, N-{no_votes}, P-{present}, NV-{not_voting}'
+            billText = f'Bill {bill.upper()}: '
         else:
-            tweet = f'{chamber} Vote {roll_call}\n{description}\n\n{result}: Y-{yes_votes}, N-{no_votes}, P-{present}, NV-{not_voting}'
+            billText = ''
+
+        #build vote string
+        voteText = f'Y-{yes_votes}, N-{no_votes}'
+        if present != 0:
+            voteText += f', P-{present}'
+        if not_voting != 0:
+            voteText += f', NV-{not_voting}'
+
+        #build tweet
+        tweet = f'{chamber} Vote {roll_call}\n{description}\n\n{question}\n{result}: {voteText}'
+
+        #check tweet length, make accomadations
+        #may need to take question into account here too, but for now focusing on description
+        if len(tweet) > 255:
+            tweet = f'{chamber} Vote {roll_call}\n{description[0:len(description) - (len(tweet) - 255)]}\n\n{question}\n{result}: {voteText}'
         
         #tweet initial vote tweet, save vote timestamp
-        log(f"Posting tweet [{tweet}]")
-        t.statuses.update(status=tweet)
-        saveLastPostTimestamp(datetime.strptime(i['date'] + " " + i['time'], "%Y-%m-%d %H:%M:%S") + timedelta(seconds=1))
+        lastTweet = postTweet(tweet)
+        if POST_TWEETS:
+            saveLastPostTimestamp(datetime.strptime(i['date'] + " " + i['time'], "%Y-%m-%d %H:%M:%S") + timedelta(seconds=1))
 
         #now post additional information to a reply of this tweet
         democratVotes = "Dem: Y-" + str(i['democratic']['yes']) + ", N-" + str(i['democratic']['no']) + ", P-" + str(i['democratic']['present']) + ", NV-" + str(i['democratic']['not_voting'])
@@ -151,9 +165,7 @@ def postNewVotes(votes):
             tweet = f'@{BOT_SCREEN_NAME} Vote Breakdown:\n{democratVotes}\n{republicanVotes}\n{independentVotes}\n\nDetails:\n{vote_url}'
 
         #tweet voting breakdown
-        lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
-        log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
-        t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet)
+        lastTweet = postTweet(tweet, lastTweet)
 
         #grab propublica vote link:
         propublicaVoteLink = getPropublicaVoteLink(chamber, congress, roll_call, session)
@@ -172,18 +184,13 @@ def postNewVotes(votes):
         tweet = f'{tweet}\nGovTrack: {govtrackVoteLink}'
         
         #tweet additional vote information
-        lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
-        log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
-        t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet, card_uri='tombstone://card')
+        lastTweet = postTweet(tweet, lastTweet, True)
 
         #now tweet nomination data if any
         if nomination != '':
             nominationLink = getCongressNominationLink(congress, nomination)
             tweet = f'@{BOT_SCREEN_NAME} Nomination {nomination}\nDetails: {nominationLink}'
-
-            lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
-            log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
-            t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet, card_uri='tombstone://card')
+            lastTweet = postTweet(tweet, lastTweet, True)
 
         #now post bill data if any
         if bill != '':
@@ -218,9 +225,7 @@ def postNewVotes(votes):
             
             #tweet bill information
             tweet = f'@{BOT_SCREEN_NAME} {sponsorText}\nBill Details: {bill_details_url}'
-            lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
-            log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
-            t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet)
+            lastTweet = postTweet(tweet, lastTweet)
         
             #grab c span bill link
             bill_number = i['bill']['number']
@@ -231,9 +236,26 @@ def postNewVotes(votes):
 
             #tweet additional bill links
             tweet = f'@{BOT_SCREEN_NAME} Bill Links\nC-SPAN: {cpanBillLink}\nProPublica: {propublicaBillLink}\nGovTrack: {govtrack_url}'
-            lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
-            log(f"Posting tweet [{tweet}] in reply to tweet [{lastTweet['id']}]")
-            t.statuses.update(in_reply_to_status_id=lastTweet['id'], status=tweet, card_uri='tombstone://card')
+            lastTweet = postTweet(tweet, lastTweet, True)
+
+def postTweet(tweet, replyToID=None, stopEmbeds=False):
+    #post a tweet, return tweet ID
+    if POST_TWEETS:
+        t = Twitter(auth=OAuth(TWITTER_TOKEN, TWITTER_TOKEN_SECRET, TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET))
+
+        if replyToID != None:
+            log(f"Posting tweet [{tweet}] in reply to tweet [{replyToID}]")
+        else:
+            log(f"Posting tweet [{tweet}]")
+        
+        if stopEmbeds:
+            t.statuses.update(in_reply_to_status_id=replyToID, status=tweet, card_uri='tombstone://card')
+        else:
+            t.statuses.update(in_reply_to_status_id=replyToID, status=tweet)
+        
+        lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
+
+        return lastTweet['id']
 
 def getCSpanClipLink(chamber, congress, voteNumber, date):
     #we build a search link
@@ -282,6 +304,9 @@ def getCongressNominationLink(congress, nomination):
 
 def testPost():
     #just a sub to tweet the most recent vote for testing
+    global POST_TWEETS
+
+    POST_TWEETS = False
     votes = getRecentVotes()
     if votes != None:
         votes = [votes['votes'][len(votes)]]
