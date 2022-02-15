@@ -36,6 +36,7 @@ POST_TWEETS = True
 
 def saveLastPostTimestamp(timestamp: datetime):
     #save the last post timestamp so we know which records (should) have already been posted
+    log(f'Saving last post timestamp [{str(timestamp)}]')
     path = os.path.join(BASE_PATH, "Data")
     if not os.path.isdir(path):
         os.makedirs(path)
@@ -56,17 +57,20 @@ def getLastPostTimestamp():
         date = datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
 
     date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+    log(f'Reading last post timestamp [{str(date)}]')
     return date
 
 def getVotesInDateRange(startDate: datetime, endDate: datetime):
     #use api to return voting data in a date range
     endDate = endDate + timedelta(1)
+    log(f'Grabbing votes in date range[{str(startDate)} - {str(endDate)}]')
     url = PROPUBLICA_BASE_URL + Chamber.BOTH.value + "/" + Endpoints.VOTES.value + "/" + startDate.strftime("%Y-%m-%d") + "/" + endDate.strftime("%Y-%m-%d") + ".json"
     votes = proPublicaAPIGet(url)
     return votes
 
 def getRecentVotes():
     #use api to return recent votes
+    log('Grabbing recent votes...')
     url = PROPUBLICA_BASE_URL + Chamber.BOTH.value + "/" + Endpoints.VOTES.value + "/recent.json"
     votes = proPublicaAPIGet(url)
     return votes
@@ -84,6 +88,7 @@ def proPublicaAPIGet(url):
 
 def getNewPostData(lastPost: datetime, votes):
     #takes a list of votes and the last post timestamp and returns votes after that timestamp
+    log('Parsing out votes since last post...')
     newVotes = []
     for i in range(len(votes) - 1, -1, -1):
         date = datetime.strptime(votes[i]['date'] + " " + votes[i]['time'], "%Y-%m-%d %H:%M:%S")
@@ -93,13 +98,15 @@ def getNewPostData(lastPost: datetime, votes):
 
 def getMemberData(memberID):
     #return data for a specific member
+    log(f'Grabbing member data for member [{memberID}]')
     url = PROPUBLICA_BASE_URL + Endpoints.MEMBERS.value + "/" + memberID + ".json"
     member = proPublicaAPIGet(url)
     return member
 
 def postNewVotes(votes):
     #for each new vote, create the tweet and post it
-        
+    log('Posting new vote information...')
+
     for i in votes:
         congress = i['congress']
         session = i['session']
@@ -307,6 +314,8 @@ def testPost():
     global POST_TWEETS
 
     POST_TWEETS = False
+
+    log('Running test post...')
     votes = getRecentVotes()
     if votes != None:
         votes = [votes['votes'][len(votes)]]
@@ -326,16 +335,15 @@ def log(message):
     if not os.path.isdir(path):
         os.makedirs(path)
     
-    'write a new log each day'
+    #write a new log each day
     fileName = f'Log_{datetime.strftime(datetime.today(), "%Y-%m-%d")}.txt'
     path = os.path.join(path, fileName)
     with open(path, 'a+') as f:
         f.write(message)
         
-
 def startBot():
     #full process, run in a loop. Later will remove the loop and just schedule the program instead
-    log(f"Program starting...")
+    log(f"Bot starting up...")
     while 1 != 0:
         log(f"Starting update process...")
         lastDate = getLastPostTimestamp()
@@ -361,6 +369,8 @@ def main():
     global TWITTER_TOKEN 
     global TWITTER_TOKEN_SECRET 
     global PROPUBLICA_API_KEY 
+
+    log('Initializing program...')
 
     #load constants
     BASE_PATH = Path(os.path.realpath(__file__)).parent
