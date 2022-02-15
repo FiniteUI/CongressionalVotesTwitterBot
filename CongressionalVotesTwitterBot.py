@@ -316,7 +316,22 @@ def testPost():
 
 def log(message):
     #log a message, add timestamp to it
-    print(f"{datetime.now()}: {message}")
+    message = f"{datetime.now()}: {message}"
+    message = message.replace('\n', '\t')
+    print(message)
+    message += '\n'
+
+    #save the last post timestamp so we know which records (should) have already been posted
+    path = os.path.join(BASE_PATH, "Data", "Logs")
+    if not os.path.isdir(path):
+        os.makedirs(path)
+    
+    'write a new log each day'
+    fileName = f'Log_{datetime.strftime(datetime.today(), "%Y-%m-%d")}.txt'
+    path = os.path.join(path, fileName)
+    with open(path, 'a+') as f:
+        f.write(message)
+        
 
 def startBot():
     #full process, run in a loop. Later will remove the loop and just schedule the program instead
