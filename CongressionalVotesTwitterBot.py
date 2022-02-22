@@ -121,12 +121,14 @@ def postNewVotes(votes):
             bill = ''
             description = i['description']
 
-        #grab nomination ID for nomination information below
-        if 'number' in i['nomination']:
-            nomination = i['nomination']['number']
-        else:
-            nomination = ''
+        #NEED TO ACCOUNT FOR AMENDMENTS
 
+        #grab nomination ID for nomination information below
+        nomination = ''
+        if 'nomination' in i:
+            if 'number' in i['nomination']:
+                nomination = i['nomination']['number']
+                
         question = i['question']
         result = i['result']
         yes_votes = i['total']['yes']
