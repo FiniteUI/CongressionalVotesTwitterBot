@@ -360,6 +360,18 @@ def getCongressNominationLink(congress, nomination):
     link = f'https://www.congress.gov/nomination/{congress}-congress/{nomination}'
     return link
 
+def updateLastUpdate():
+    #updates the bot bio with the last update time
+    t = Twitter(auth=OAuth(TWITTER_TOKEN, TWITTER_TOKEN_SECRET, TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET))
+    
+    botProfile = t.users.show(screen_name = BOT_SCREEN_NAME)
+    botBio = botProfile['description']
+    botBioSplit = botBio.split("Last Update: ")
+    botBio = botBioSplit[0].strip() + ' ' + f'Last Update: {datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")} UTC'
+    
+    log("Updating last update in Bio...")
+    t.account.update_profile(description = botBio)
+
 def testPost():
     #just a sub to tweet the most recent vote for testing
     global POST_TWEETS
@@ -410,6 +422,7 @@ def startBot():
                     postNewVotes(newVoteData)
         else:
             log(f"Error - No data returned from votes date range API request...")
+        updateLastUpdate()
         log(f"Update process complete")
         time.sleep(300)
 
