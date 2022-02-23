@@ -19,6 +19,7 @@ class Chamber(Enum):
 class Endpoints(Enum):
     VOTES = 'votes'
     MEMBERS = 'members'
+    AMENDMENTS = 'amendments'
 
 #globals
 BASE_PATH = ''
@@ -103,6 +104,30 @@ def getMemberData(memberID):
     member = proPublicaAPIGet(url)
     return member
 
+def getAmendmentData(congress, number):
+    #return data for a specific amendment
+    log(f'Grabbing amendment data for amendment [{number}]')
+    number = number.lower()
+    number = number.replace(' ', '')
+    number = number.replace('.', '')
+    url = PROPUBLICA_BASE_URL + Endpoints.AMENDMENTS.value + "/" + congress + "/" + number + ".json"
+    member = proPublicaAPIGet(url)
+    return member
+
+def getTwitterHandle(memberID):
+    #return twitter handle for specific member
+    log(f'Grabbing twitter handle for member [{memberID}]')
+    sponsor_data = getMemberData(memberID)
+
+    if sponsor_data != None:
+        sponsor_data = sponsor_data[0]
+        twitterHandle = sponsor_data['twitter_account']
+    else:
+        log(f"Error - No data returned from member API request...")
+        twitterHandle = ''
+    
+    return twitterHandle
+
 def postNewVotes(votes):
     #for each new vote, create the tweet and post it
     log('Posting new vote information...')
@@ -121,13 +146,11 @@ def postNewVotes(votes):
             bill = ''
             description = i['description']
 
-        #NEED TO ACCOUNT FOR AMENDMENTS
-
-        #grab nomination ID for nomination information below
-        nomination = ''
-        if 'nomination' in i:
-            if 'number' in i['nomination']:
-                nomination = i['nomination']['number']
+        #grab amendment information
+        amendment = ''
+        if 'amendment' in i:
+            if 'number' in i['amendment']:
+                amendment = i['amendment']['number']
                 
         question = i['question']
         result = i['result']
@@ -150,7 +173,10 @@ def postNewVotes(votes):
             voteText += f', NV-{not_voting}'
 
         #build tweet
-        tweet = f'{chamber} Vote {roll_call}\n{description}\n\n{question}\n{result}: {voteText}'
+        if amendment != '':
+            tweet = f'{chamber} Vote {roll_call}\n{description}\n\n{question} {amendment}\n{result}: {voteText}'
+        else:
+            tweet = f'{chamber} Vote {roll_call}\n{description}\n\n{question}\n{result}: {voteText}'
 
         #check tweet length, make accomadations
         #may need to take question into account here too, but for now focusing on description
@@ -195,11 +221,44 @@ def postNewVotes(votes):
         #tweet additional vote information
         lastTweet = postTweet(tweet, lastTweet, True)
 
-        #now tweet nomination data if any
-        if nomination != '':
-            nominationLink = getCongressNominationLink(congress, nomination)
-            tweet = f'@{BOT_SCREEN_NAME} Nomination {nomination}\nDetails: {nominationLink}'
-            lastTweet = postTweet(tweet, lastTweet, True)
+        #grab nomination ID for nomination information below
+        nomination = ''
+        if 'nomination' in i:
+            if 'number' in i['nomination']:
+                nomination = i['nomination']['number']
+
+                #now tweet nomination data if any
+                nominationLink = getCongressNominationLink(congress, nomination)
+                tweet = f'@{BOT_SCREEN_NAME} Nomination {nomination}\nDetails: {nominationLink}'
+                lastTweet = postTweet(tweet, lastTweet, True)
+
+        #now tweet amendment information if any
+        if amendment != '':
+            #get sponsor info
+            sponsor = i['amendment']['sponsor']
+            sponsor_id = i['amendment']['sponsor_id']
+            sponsor_party = i['amendment']['sponsor_party']
+            sponsor_state = i['amendment']['sponsor_state']
+            twitterHandle = getTwitterHandle(sponsor_id)
+
+            #build sponsor info
+            sponsorText = ''
+            if (sponsor_id != ''):
+                if (twitterHandle != ''):
+                    sponsorText = f'Amd Sponsor: .@{twitterHandle} {sponsor_party}, {sponsor_state}\n'
+                else:
+                    sponsorText = f'Amd Sponsor: {sponsor}, {sponsor_party}, {sponsor_state}\n'
+
+            #amendment data doesn't seem to be returning from the api properly, so we'll leave this for now
+            #info = getAmendmentData(congress, amendment)
+
+            amendmentDescription = i['description']
+
+            #tweet amendment information
+            tweet = f'@{BOT_SCREEN_NAME} {sponsorText}Amd Details: {amendmentDescription}'
+            if len(tweet) > 255:
+                tweet = tweet[0:251] + '...'
+            lastTweet = postTweet(tweet, lastTweet)
 
         #now post bill data if any
         if bill != '':
@@ -212,25 +271,15 @@ def postNewVotes(votes):
             govtrack_url = bill_data['govtrack_url']
             
             #if sponsored, get sponsor information
-            if(bill_sponsor_id != ''):
-                sponsor_data = getMemberData(bill_sponsor_id)
-
-                if sponsor_data != None:
-                    sponsor_data = sponsor_data[0]
-                    twitterHandle = sponsor_data['twitter_account']
-                else:
-                    log(f"Error - No data returned from member API request...")
-                    twitterHandle = ''
-            else:
-                twitterHandle = ''
+            twitterHandle = getTwitterHandle(bill_sponsor_id)
             
             #now build the tweet
             sponsorText = ''
             if (bill_sponsor_id != ''):
                 if (twitterHandle != ''):
-                    sponsorText = f'Sponsor: .@{twitterHandle}\n'
+                    sponsorText = f'Bill Sponsor: .@{twitterHandle}\n'
                 else:
-                    sponsorText = f'Sponsor: {bill_sponsor}\n'
+                    sponsorText = f'Bill Sponsor: {bill_sponsor}\n'
             
             #tweet bill information
             tweet = f'@{BOT_SCREEN_NAME} {sponsorText}\nBill Details: {bill_details_url}'
@@ -320,7 +369,7 @@ def testPost():
     log('Running test post...')
     votes = getRecentVotes()
     if votes != None:
-        votes = [votes['votes'][len(votes)]]
+        votes = [votes['votes'][len(votes)-1]]
         postNewVotes(votes)
     else:
         log(f"Error - No data returned from recent votes API request...")
