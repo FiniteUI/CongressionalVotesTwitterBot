@@ -208,6 +208,8 @@ def postNewVotes(votes):
         #grab c span vote link
         date = datetime.strptime(i['date'] + " " + i['time'], "%Y-%m-%d %H:%M:%S")
         cspanLink = getCSpanClipLink(chamber, congress, roll_call, date)
+        if cspanLink == None:
+            cspanLink = ''
 
         #grab govtrack vote link
         govtrackVoteLink = getGovTrackVoteLink(congress, date, chamber, roll_call)
@@ -316,20 +318,27 @@ def postTweet(tweet, replyToID=None, stopEmbeds=False):
         return lastTweet['id']
 
 def getCSpanClipLink(chamber, congress, voteNumber, date):
+    log(f"Grabbing C Span clip link for {congress}-{chamber}-{voteNumber}")
+
     #we build a search link
     searchLink = f'https://www.c-span.org/congress/votes/?congress={congress}&chamber={chamber}&vote-status-sort=all&vote-number-search={voteNumber}&vote-start-date={date.month}%2F{date.day}%2F{date.year}&vote-end-date={date.month}%2F{date.day}%2F{date.year}'
 
     #run a get to retrieve the search page
     with requests.get(searchLink) as searchData:
         #parse the video result from the html
-        link = re.findall('''"\/\/www\.c-span\.org\/video\/\?.+"''', searchData.text)[0]
-        link = link.replace('"', '')
-        link = link.replace('//', '')
-        link = link + "&vod"
+        link = re.findall('''"\/\/www\.c-span\.org\/video\/\?.+"''', searchData.text)
+        finalLink = ''
+        if link != None and link != '' and len(link) > 0:
+            link = link[0]
+            link = link.replace('"', '')
+            link = link.replace('//', '')
+            link = link + "&vod"
+            finalLink = link
 
-        return link
+        return finalLink
 
 def getCSpanBillLink(congress, billNumber):
+
     billNumber = billNumber.replace(".", '')
     billNumber = billNumber.lower()
     link = f"https://www.c-span.org/congress/bills/bill/?{congress}/{billNumber}"
@@ -381,7 +390,7 @@ def testPost():
     log('Running test post...')
     votes = getRecentVotes()
     if votes != None:
-        votes = [votes['votes'][len(votes)-1]]
+        votes = [votes['votes'][len(votes)]]
         postNewVotes(votes)
     else:
         log(f"Error - No data returned from recent votes API request...")
