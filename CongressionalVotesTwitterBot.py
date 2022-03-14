@@ -269,6 +269,7 @@ def postNewVotes(votes):
         if bill != '':
             bill_url = i['bill']['api_uri']
 
+            govtrack_url = ''
             if bill_url != None:
                 bill_data = proPublicaAPIGet(bill_url)
                 bill_data = bill_data[0]
@@ -300,7 +301,10 @@ def postNewVotes(votes):
             propublicaBillLink = getPropublicaBillLink(congress, bill_number)
 
             #tweet additional bill links
-            tweet = f'@{BOT_SCREEN_NAME} Bill Links\nC-SPAN: {cpanBillLink}\nProPublica: {propublicaBillLink}\nGovTrack: {govtrack_url}'
+            if govtrack_url == '':
+                tweet = f'@{BOT_SCREEN_NAME} Bill Links\nC-SPAN: {cpanBillLink}\nProPublica: {propublicaBillLink}'
+            else:
+                tweet = f'@{BOT_SCREEN_NAME} Bill Links\nC-SPAN: {cpanBillLink}\nProPublica: {propublicaBillLink}\nGovTrack: {govtrack_url}'
             lastTweet = postTweet(tweet, lastTweet, True)
 
 def postTweet(tweet, replyToID=None, stopEmbeds=False):
@@ -391,14 +395,7 @@ def testPost():
     global POST_TWEETS
 
     POST_TWEETS = False
-
-    log('Running test post...')
-    votes = getRecentVotes()
-    if votes != None:
-        votes = [votes['votes'][len(votes)]]
-        postNewVotes(votes)
-    else:
-        log(f"Error - No data returned from recent votes API request...")
+    startBot()
 
 def log(message):
     #log a message, add timestamp to it
@@ -462,7 +459,7 @@ def main():
     TWITTER_TOKEN_SECRET = os.getenv('TWITTER_TOKEN_SECRET')
     PROPUBLICA_API_KEY = os.getenv('PROPUBLICA_API_KEY')
 
-    #run a test post
+    #run bot in test mode
     #testPost()
 
     #run the bot
