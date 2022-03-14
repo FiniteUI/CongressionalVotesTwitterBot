@@ -146,6 +146,9 @@ def postNewVotes(votes):
             bill = ''
             description = i['description']
 
+        if description == None:
+            description = ''
+
         #grab amendment information
         amendment = ''
         if 'amendment' in i:
@@ -265,27 +268,29 @@ def postNewVotes(votes):
         #now post bill data if any
         if bill != '':
             bill_url = i['bill']['api_uri']
-            bill_data = proPublicaAPIGet(bill_url)
-            bill_data = bill_data[0]
-            bill_details_url = bill_data['congressdotgov_url']
-            bill_sponsor = bill_data['sponsor_title'] + " " + bill_data['sponsor']
-            bill_sponsor_id = bill_data['sponsor_id']
-            govtrack_url = bill_data['govtrack_url']
+
+            if bill_url != None:
+                bill_data = proPublicaAPIGet(bill_url)
+                bill_data = bill_data[0]
+                bill_details_url = bill_data['congressdotgov_url']
+                bill_sponsor = bill_data['sponsor_title'] + " " + bill_data['sponsor']
+                bill_sponsor_id = bill_data['sponsor_id']
+                govtrack_url = bill_data['govtrack_url']
+                
+                #if sponsored, get sponsor information
+                twitterHandle = getTwitterHandle(bill_sponsor_id)
             
-            #if sponsored, get sponsor information
-            twitterHandle = getTwitterHandle(bill_sponsor_id)
+                #now build the tweet
+                sponsorText = ''
+                if (bill_sponsor_id != ''):
+                    if (twitterHandle != ''):
+                        sponsorText = f'Bill Sponsor: .@{twitterHandle}\n'
+                    else:
+                        sponsorText = f'Bill Sponsor: {bill_sponsor}\n'
             
-            #now build the tweet
-            sponsorText = ''
-            if (bill_sponsor_id != ''):
-                if (twitterHandle != ''):
-                    sponsorText = f'Bill Sponsor: .@{twitterHandle}\n'
-                else:
-                    sponsorText = f'Bill Sponsor: {bill_sponsor}\n'
-            
-            #tweet bill information
-            tweet = f'@{BOT_SCREEN_NAME} {sponsorText}\nBill Details: {bill_details_url}'
-            lastTweet = postTweet(tweet, lastTweet)
+                #tweet bill information
+                tweet = f'@{BOT_SCREEN_NAME} {sponsorText}\nBill Details: {bill_details_url}'
+                lastTweet = postTweet(tweet, lastTweet)
         
             #grab c span bill link
             bill_number = i['bill']['number']
