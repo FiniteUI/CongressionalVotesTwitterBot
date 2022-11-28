@@ -63,10 +63,30 @@ def getLastPostTimestamp():
 
 def getVotesInDateRange(startDate: datetime, endDate: datetime):
     #use api to return voting data in a date range
+    votes = []
     endDate = endDate + timedelta(1)
-    log(f'Grabbing votes in date range[{str(startDate)} - {str(endDate)}]')
-    url = PROPUBLICA_BASE_URL + Chamber.BOTH.value + "/" + Endpoints.VOTES.value + "/" + startDate.strftime("%Y-%m-%d") + "/" + endDate.strftime("%Y-%m-%d") + ".json"
-    votes = proPublicaAPIGet(url)
+
+    daysBetween = endDate - startDate
+    daysBetween = daysBetween.days
+    if daysBetween > 30:
+        log(f'Date range[{str(startDate)} - {str(endDate)}] is larger than 30 days, splitting up...')
+        thisDate = startDate
+
+        while (thisDate < endDate):
+            thisStart = thisDate
+            thisDate += timedelta(30)
+            if thisDate > endDate:
+                thisDate = endDate
+            
+            log(f'Grabbing votes in date range[{str(thisStart)} - {str(thisDate)}]')
+            url = PROPUBLICA_BASE_URL + Chamber.BOTH.value + "/" + Endpoints.VOTES.value + "/" + thisStart.strftime("%Y-%m-%d") + "/" + thisDate.strftime("%Y-%m-%d") + ".json"
+            votes.extend(proPublicaAPIGet(url)['votes'])
+
+    else:
+        log(f'Grabbing votes in date range[{str(startDate)} - {str(endDate)}]')
+        url = PROPUBLICA_BASE_URL + Chamber.BOTH.value + "/" + Endpoints.VOTES.value + "/" + startDate.strftime("%Y-%m-%d") + "/" + endDate.strftime("%Y-%m-%d") + ".json"
+        votes = proPublicaAPIGet(url)['votes']
+
     return votes
 
 def getRecentVotes():
@@ -424,10 +444,10 @@ def startBot():
         voteData = getVotesInDateRange(lastDate, datetime.today())
         #voteData = getRecentVotes()
         if voteData != None:
-            length = len(voteData['votes'])
+            length = len(voteData)
             if (length > 0):
                 log(f'{length} votes found since last post date...')
-                newVoteData = getNewPostData(lastDate, voteData['votes'])
+                newVoteData = getNewPostData(lastDate, voteData)
                 log(f'{len(newVoteData)} new votes found since last post...')
                 if(len(newVoteData) > 0):
                     postNewVotes(newVoteData)
