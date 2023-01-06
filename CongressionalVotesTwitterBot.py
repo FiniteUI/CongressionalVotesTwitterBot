@@ -157,6 +157,8 @@ def postNewVotes(votes):
         session = i['session']
         chamber = i['chamber']
         roll_call = i['roll_call']
+
+        log(f'Processing vote {chamber}-{congress}-{session}-{roll_call}...')
         
         #grab bill ID for bill information below
         if 'bill_id' in i['bill']:
@@ -177,10 +179,28 @@ def postNewVotes(votes):
                 
         question = i['question']
         result = i['result']
-        yes_votes = i['total']['yes']
-        no_votes = i['total']['no']
-        not_voting = i['total']['not_voting']
-        present = i['total']['present']
+
+        speakerVotes = ''
+        voteText = ''
+        if question == 'Election of the Speaker':
+            for speaker in i['total']:
+                votes = i['total'][speaker]
+                if speakerVotes == '':
+                    speakerVotes += f'{speaker} : {votes}'
+                else:
+                    speakerVotes += f'\n{speaker} : {votes}'
+        else:
+            yes_votes = i['total']['yes']
+            no_votes = i['total']['no']
+            not_voting = i['total']['not_voting']
+            present = i['total']['present']
+
+             #build vote string
+            voteText = f'Y-{yes_votes}, N-{no_votes}'
+            if present != 0:
+                voteText += f', P-{present}'
+            if not_voting != 0:
+                voteText += f', NV-{not_voting}'
 
         #build bill string
         if bill != '':
@@ -188,39 +208,42 @@ def postNewVotes(votes):
         else:
             billText = ''
 
-        #build vote string
-        voteText = f'Y-{yes_votes}, N-{no_votes}'
-        if present != 0:
-            voteText += f', P-{present}'
-        if not_voting != 0:
-            voteText += f', NV-{not_voting}'
-
         #build tweet
-        if amendment != '':
-            tweet = f'{chamber} Vote {roll_call}\n{description}\n\n{question} {amendment}\n{result}: {voteText}'
+        if voteText == '':
+            #this should be a speaker vote
+            tweet = f'{chamber} Vote {roll_call}\n{description}\n\n{question} {amendment}\n{result}'
         else:
-            tweet = f'{chamber} Vote {roll_call}\n{description}\n\n{question}\n{result}: {voteText}'
+            if amendment != '':
+                tweet = f'{chamber} Vote {roll_call}\n{description}\n\n{question} {amendment}\n{result}: {voteText}'
+                #check tweet length, make accomadations
+                #may need to take question into account here too, but for now focusing on description
+                if len(tweet) > 255:
+                    tweet = f'{chamber} Vote {roll_call}\n{description[0:len(description) - (len(tweet) - 255)]}\n\n{question}\n{result}: {voteText}'
+            else:
+                tweet = f'{chamber} Vote {roll_call}\n{description}\n\n{question}\n{result}: {voteText}'
 
-        #check tweet length, make accomadations
-        #may need to take question into account here too, but for now focusing on description
-        if len(tweet) > 255:
-            tweet = f'{chamber} Vote {roll_call}\n{description[0:len(description) - (len(tweet) - 255)]}\n\n{question}\n{result}: {voteText}'
-        
         #tweet initial vote tweet, save vote timestamp
         lastTweet = postTweet(tweet)
         if POST_TWEETS:
             saveLastPostTimestamp(datetime.strptime(i['date'] + " " + i['time'], "%Y-%m-%d %H:%M:%S") + timedelta(seconds=1))
 
+        if speakerVotes != '':
+            tweet = f'@{BOT_SCREEN_NAME} Votes:\n{speakerVotes}'
+            lastTweet = postTweet(tweet, lastTweet)
+
         #now post additional information to a reply of this tweet
-        democratVotes = "Dem: Y-" + str(i['democratic']['yes']) + ", N-" + str(i['democratic']['no']) + ", P-" + str(i['democratic']['present']) + ", NV-" + str(i['democratic']['not_voting'])
-        republicanVotes = "Rep: Y-" + str(i['republican']['yes']) + ", N-" + str(i['republican']['no']) + ", P-" + str(i['republican']['present']) + ", NV-" + str(i['republican']['not_voting'])
-        independentVotes = "Ind: Y-" + str(i['independent']['yes']) + ", N-" + str(i['independent']['no']) + ", P-" + str(i['independent']['present']) + ", NV-" + str(i['independent']['not_voting'])
         vote_url = i['url']
-        
-        if independentVotes == "Ind: Y-0, N-0, P-0, NV-0":
-            tweet = f'@{BOT_SCREEN_NAME} Vote Breakdown:\n{democratVotes}\n{republicanVotes}\n\nDetails:\n{vote_url}'
+        if speakerVotes == '':
+            democratVotes = "Dem: Y-" + str(i['democratic']['yes']) + ", N-" + str(i['democratic']['no']) + ", P-" + str(i['democratic']['present']) + ", NV-" + str(i['democratic']['not_voting'])
+            republicanVotes = "Rep: Y-" + str(i['republican']['yes']) + ", N-" + str(i['republican']['no']) + ", P-" + str(i['republican']['present']) + ", NV-" + str(i['republican']['not_voting'])
+            independentVotes = "Ind: Y-" + str(i['independent']['yes']) + ", N-" + str(i['independent']['no']) + ", P-" + str(i['independent']['present']) + ", NV-" + str(i['independent']['not_voting'])
+            
+            if independentVotes == "Ind: Y-0, N-0, P-0, NV-0":
+                tweet = f'@{BOT_SCREEN_NAME} Vote Breakdown:\n{democratVotes}\n{republicanVotes}\n\nDetails:\n{vote_url}'
+            else:
+                tweet = f'@{BOT_SCREEN_NAME} Vote Breakdown:\n{democratVotes}\n{republicanVotes}\n{independentVotes}\n\nDetails:\n{vote_url}'
         else:
-            tweet = f'@{BOT_SCREEN_NAME} Vote Breakdown:\n{democratVotes}\n{republicanVotes}\n{independentVotes}\n\nDetails:\n{vote_url}'
+                tweet = f'@{BOT_SCREEN_NAME} Vote Details:\n{vote_url}'
 
         #tweet voting breakdown
         lastTweet = postTweet(tweet, lastTweet)
@@ -326,16 +349,27 @@ def postNewVotes(votes):
             else:
                 tweet = f'@{BOT_SCREEN_NAME} Bill Links\nC-SPAN: {cpanBillLink}\nProPublica: {propublicaBillLink}\nGovTrack: {govtrack_url}'
             lastTweet = postTweet(tweet, lastTweet, True)
+        
+        log(f"Waiting for 30 seconds...")
+        time.sleep(30)
 
-def postTweet(tweet, replyToID=None, stopEmbeds=False):
+def postTweet(tweet, replyToID=None, stopEmbeds=False):  
     #post a tweet, return tweet ID
     if POST_TWEETS:
+        #some issues with posting too fast, so we will do a small wait here
+        log(f"Waiting for 1 second...")
+        time.sleep(1)
+
         t = Twitter(auth=OAuth(TWITTER_TOKEN, TWITTER_TOKEN_SECRET, TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET))
 
         if replyToID != None:
             log(f"Posting tweet [{tweet}] in reply to tweet [{replyToID}]")
         else:
             log(f"Posting tweet [{tweet}]")
+
+        if len(tweet) > 255:
+            log(f"Warning: Tweet [{tweet}] is greater than 255 characters")
+            #tweet = tweet[0:255]
         
         if stopEmbeds:
             t.statuses.update(in_reply_to_status_id=replyToID, status=tweet, card_uri='tombstone://card')
@@ -455,6 +489,8 @@ def startBot():
             log(f"Error - No data returned from votes date range API request...")
         updateLastUpdate()
         log(f"Update process complete")
+
+        log(f"Waiting for 300 seconds...")
         time.sleep(300)
 
 def main():
