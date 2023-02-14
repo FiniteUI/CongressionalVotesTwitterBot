@@ -350,27 +350,31 @@ def postNewVotes(votes):
                 tweet = f'@{BOT_SCREEN_NAME} Bill Links\nC-SPAN: {cpanBillLink}\nProPublica: {propublicaBillLink}\nGovTrack: {govtrack_url}'
             lastTweet = postTweet(tweet, lastTweet, True)
         
-        log(f"Waiting for 30 seconds...")
-        time.sleep(30)
+        #log(f"Waiting for 30 seconds...")
+        #time.sleep(30)
 
 def postTweet(tweet, replyToID=None, stopEmbeds=False):  
     #post a tweet, return tweet ID
+    #some issues with posting too fast, so we will do a small wait here
+    log(f"Waiting for 1 second...")
+    time.sleep(1)
+
+    t = Twitter(auth=OAuth(TWITTER_TOKEN, TWITTER_TOKEN_SECRET, TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET))
+
+    if replyToID != None:
+        log(f"Posting tweet [{tweet}] in reply to tweet [{replyToID}]")
+    else:
+        log(f"Posting tweet [{tweet}]")
+
+    if len(tweet) > 255:
+        log(f"Warning: Tweet [{tweet}] is greater than 255 characters")
+        #shortening tweet
+        tweet = tweet.replace("On Motion to ", "")
+        tweet = tweet.replace("Suspend the Rules and ", "")
+        tweet = tweet[0:252]
+        tweet += '...'
+    
     if POST_TWEETS:
-        #some issues with posting too fast, so we will do a small wait here
-        log(f"Waiting for 1 second...")
-        time.sleep(1)
-
-        t = Twitter(auth=OAuth(TWITTER_TOKEN, TWITTER_TOKEN_SECRET, TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET))
-
-        if replyToID != None:
-            log(f"Posting tweet [{tweet}] in reply to tweet [{replyToID}]")
-        else:
-            log(f"Posting tweet [{tweet}]")
-
-        if len(tweet) > 255:
-            log(f"Warning: Tweet [{tweet}] is greater than 255 characters")
-            #tweet = tweet[0:255]
-        
         if stopEmbeds:
             t.statuses.update(in_reply_to_status_id=replyToID, status=tweet, card_uri='tombstone://card')
         else:
