@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from enum import Enum
 import requests
-from twitter import *
+import tweepy
 import time
 import re
 import dotenv
@@ -34,6 +34,7 @@ PROPUBLICA_API_KEY = ''
 
 #for testing
 POST_TWEETS = True
+UPDATE_BIO = False
 
 def saveLastPostTimestamp(timestamp: datetime):
     #save the last post timestamp so we know which records (should) have already been posted
@@ -355,11 +356,7 @@ def postNewVotes(votes):
 
 def postTweet(tweet, replyToID=None, stopEmbeds=False):  
     #post a tweet, return tweet ID
-    #some issues with posting too fast, so we will do a small wait here
-    log(f"Waiting for 1 second...")
-    time.sleep(1)
-
-    t = Twitter(auth=OAuth(TWITTER_TOKEN, TWITTER_TOKEN_SECRET, TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET))
+    client = tweepy.Client(consumer_key=TWITTER_CONSUMER_KEY, consumer_secret=TWITTER_CONSUMER_SECRET, access_token=TWITTER_TOKEN, access_token_secret=TWITTER_TOKEN_SECRET)
 
     if replyToID != None:
         log(f"Posting tweet [{tweet}] in reply to tweet [{replyToID}]")
@@ -376,13 +373,11 @@ def postTweet(tweet, replyToID=None, stopEmbeds=False):
     
     if POST_TWEETS:
         if stopEmbeds:
-            t.statuses.update(in_reply_to_status_id=replyToID, status=tweet, card_uri='tombstone://card')
+            response = client.create_tweet(in_reply_to_tweet_id=replyToID, text=tweet)
         else:
-            t.statuses.update(in_reply_to_status_id=replyToID, status=tweet)
-        
-        lastTweet = t.statuses.user_timeline(screen_name=BOT_SCREEN_NAME, count=1)[0]
+            response = client.create_tweet(in_reply_to_tweet_id=replyToID, text=tweet)
 
-        return lastTweet['id']
+    return response.data['id']
 
 def getCSpanClipLink(chamber, congress, voteNumber, date):
     log(f"Grabbing C Span clip link for {congress}-{chamber}-{voteNumber}")
@@ -437,16 +432,19 @@ def getCongressNominationLink(congress, nomination):
     return link
 
 def updateLastUpdate():
-    #updates the bot bio with the last update time
-    t = Twitter(auth=OAuth(TWITTER_TOKEN, TWITTER_TOKEN_SECRET, TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET))
+    #fix later
+    pass
+#     #updates the bot bio with the last update time
+#     t = Twitter(auth=OAuth(TWITTER_TOKEN, TWITTER_TOKEN_SECRET, TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET))
+#     #auth = tweepy.OAuth1UserHandler(TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET, TWITTER_TOKEN, TWITTER_TOKEN_SECRET)
     
-    botProfile = t.users.show(screen_name = BOT_SCREEN_NAME)
-    botBio = botProfile['description']
-    botBioSplit = botBio.split("Last Update: ")
-    botBio = botBioSplit[0].strip() + ' ' + f'Last Update: {datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")} UTC'
+#     botProfile = t.users.show(screen_name = BOT_SCREEN_NAME)
+#     botBio = botProfile['description']
+#     botBioSplit = botBio.split("Last Update: ")
+#     botBio = botBioSplit[0].strip() + ' ' + f'Last Update: {datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")} UTC'
     
-    log("Updating last update in Bio...")
-    t.account.update_profile(description = botBio)
+#     log("Updating last update in Bio...")
+#     t.account.update_profile(description = botBio)
 
 def testPost():
     #just a sub to tweet the most recent vote for testing
@@ -491,7 +489,8 @@ def startBot():
                     postNewVotes(newVoteData)
         else:
             log(f"Error - No data returned from votes date range API request...")
-        updateLastUpdate()
+        if UPDATE_BIO:
+            updateLastUpdate()
         log(f"Update process complete")
 
         log(f"Waiting for 300 seconds...")
