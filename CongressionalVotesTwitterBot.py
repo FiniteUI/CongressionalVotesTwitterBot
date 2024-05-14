@@ -351,13 +351,17 @@ def postNewVotes(votes):
                 tweet = f'@{BOT_SCREEN_NAME} Bill Links\nC-SPAN: {cpanBillLink}\nProPublica: {propublicaBillLink}\nGovTrack: {govtrack_url}'
             lastTweet = postTweet(tweet, lastTweet, True)
         
-        #log(f"Waiting for 30 seconds...")
-        #time.sleep(30)
+        log(f"Waiting for 300 seconds...")
+        time.sleep(300)
 
-def postTweet(tweet, replyToID=None, stopEmbeds=False):  
+def postTweet(tweet, replyToID=None, stopEmbeds=False):
+    sleep_time = 60
+    posted = False
+
+    log(f"Waiting for 10 seconds...")
+    time.sleep(10)
+
     #post a tweet, return tweet ID
-    client = tweepy.Client(consumer_key=TWITTER_CONSUMER_KEY, consumer_secret=TWITTER_CONSUMER_SECRET, access_token=TWITTER_TOKEN, access_token_secret=TWITTER_TOKEN_SECRET)
-
     if replyToID != None:
         log(f"Posting tweet [{tweet}] in reply to tweet [{replyToID}]")
     else:
@@ -371,11 +375,21 @@ def postTweet(tweet, replyToID=None, stopEmbeds=False):
         tweet = tweet[0:252]
         tweet += '...'
     
-    if POST_TWEETS:
-        if stopEmbeds:
-            response = client.create_tweet(in_reply_to_tweet_id=replyToID, text=tweet)
-        else:
-            response = client.create_tweet(in_reply_to_tweet_id=replyToID, text=tweet)
+    while not posted:
+        if POST_TWEETS:
+            client = tweepy.Client(consumer_key=TWITTER_CONSUMER_KEY, consumer_secret=TWITTER_CONSUMER_SECRET, access_token=TWITTER_TOKEN, access_token_secret=TWITTER_TOKEN_SECRET)
+            #if stopEmbeds:
+            #    response = client.create_tweet(in_reply_to_tweet_id=replyToID, text=tweet)
+            #else:
+            #    response = client.create_tweet(in_reply_to_tweet_id=replyToID, text=tweet)
+            try:
+                response = client.create_tweet(in_reply_to_tweet_id=replyToID, text=tweet)
+                posted = True
+            except Exception as e:
+                log(e)
+                log(f"Waiting for {sleep_time} seconds...")
+                time.sleep(sleep_time)
+                sleep_time *= 2
 
     return response.data['id']
 
