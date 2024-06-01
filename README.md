@@ -1,5 +1,7 @@
 # Congressional Votes Twitter Bot
 
+**_Due to changes to the Twitter API, as well as the shutdown of the ProPublica API, the bot is not currently running._**
+
 This is a small personal project to build a twitter bot to post whenever congress makes a vote. 
 
 The project utilizes the ProPublic API to gather vote and bill information, and uses the twitter python package to make posts to twitter.
